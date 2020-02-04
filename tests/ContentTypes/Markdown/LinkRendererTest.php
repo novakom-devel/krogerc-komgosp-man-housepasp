@@ -3,6 +3,7 @@ namespace Todaymade\Daux\ContentTypes\Markdown;
 
 use org\bovigo\vfs\vfsStream;
 use Todaymade\Daux\Config;
+use Todaymade\Daux\ConfigBuilder;
 use Todaymade\Daux\Daux;
 use Todaymade\Daux\DauxHelper;
 use Todaymade\Daux\Tree\Builder;
@@ -13,31 +14,17 @@ class LinkRendererTest extends TestCase
 {
     protected function getTree(Config $config)
     {
-        $structure = [
-            'Content' => [
-                'Page.md' => 'some text content',
-            ],
-            'Widgets' => [
-                'Page.md' => 'another page',
-                'Button.md' => 'another page',
-            ],
-        ];
-        $root = vfsStream::setup('root', null, $structure);
 
-        $config->setDocumentationDirectory($root->url());
-        $config['valid_content_extensions'] = ['md'];
-        $config['mode'] = Daux::STATIC_MODE;
-        $config['index_key'] = 'index.html';
-
-        $tree = new Root($config);
-        Builder::build($tree, []);
-
-        return $tree;
     }
 
     public function providerRenderLink()
     {
         return [
+            // /Widgets/Page_with_#_hash
+            ['<a href="../Widgets/Page_with_hash.html">Link</a>', '[Link](../Widgets/Page_with_#_hash.md)', 'Content/Page.html'],
+            ['<a href="../Widgets/Page_with_hash.html">Link</a>', '[Link](!Widgets/Page_with_#_hash)', 'Content/Page.html'],
+            ['<a href="Page_with_hash.html">Link</a>', '[Link](Page_with_#_hash.md)', 'Widgets/Page.html'],
+
             // /Widgets/Page
             ['<a href="http://google.ch" class="Link--external">Link</a>', '[Link](http://google.ch)', 'Widgets/Page.html'],
             ['<a href="#features">Link</a>', '[Link](#features)', 'Widgets/Page.html'],
@@ -64,11 +51,33 @@ class LinkRendererTest extends TestCase
      */
     public function testRenderLink($expected, $string, $current)
     {
-        $config = new Config();
-        $config['base_url'] = '';
+        $structure = [
+            'Content' => [
+                'Page.md' => 'some text content',
+            ],
+            'Widgets' => [
+                'Page.md' => 'another page',
+                'Button.md' => 'another page',
+                'Page_with_#_hash.md' => 'page with hash',
+            ],
+        ];
+        $root = vfsStream::setup('root', null, $structure);
 
-        $config['tree'] = $this->getTree($config);
-        $config->setCurrentPage(DauxHelper::getFile($config['tree'], $current));
+        $config = ConfigBuilder::withMode()
+            ->withDocumentationDirectory($root->url())
+            ->withValidContentExtensions(['md'])
+            ->with([
+                'base_url' => ''
+            ])
+            ->build();
+
+
+        $tree = new Root($config);
+        Builder::build($tree, []);
+
+        $config = ConfigBuilder::withMode()->build();
+        $config->setTree($tree);
+        $config->setCurrentPage(DauxHelper::getFile($config->getTree(), $current));
 
         $converter = new CommonMarkConverter(['daux' => $config]);
 
